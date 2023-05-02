@@ -110,7 +110,7 @@ executor(this.resolve.bind(this), this.reject.bind(this));
 ...
 ```
 
-或者**不将**`resolve`与`reject`方法挂载在实例上，而是在`constructor`内部以箭头函数的形式定义
+或者**不将**`resolve`与`reject`方法挂载在实例上，而是在`constructor`内部以箭头函数的形式定义一个闭包函数(如下例) 或 将该箭头函数定义为实例方法 均可
 
 ```js
 ...
@@ -126,13 +126,13 @@ constructor(executor) {
   
   try {
       executor(resolve, reject);
-    } catch (err) {
+  } catch (err) {
       reject(err);
-    }
+  }
 ...
 }
 ...
 ```
 
-本文采用第二种方法实现
+本文采用第二种方法上述代码实现
 
