@@ -173,7 +173,7 @@ class MyPromise {
         this.status = REJECTED;
         this.reason = reason;
         for (let i = 0; i < this.resolvedCallbackList.length; i++) {
-          this.rejectedCallbackList[i](value);
+          this.rejectedCallbackList[i](reason);
         }
       }
     }
@@ -193,7 +193,7 @@ class MyPromise {
 
 
 
-### `then`
+### `then`与`catch`
 
 上一节可能会有疑惑，新引入两个实例属性`resolvedCallbackList`与`rejectedCallbackList`有何用处？
 
@@ -236,6 +236,170 @@ then(onResolved, onRejected) {
   }
 ```
 
-总所周知，`Promise`的`then`支持链式调用，也就是每个`then`方法都会返回一个新的`Promise`实例。且value取决于上一次`then`方法的返回值。
+总所周知，`Promise`的`then`支持链式调用，也就是每个`then`方法都会返回一个新的`Promise`实例。
 
-TODO......
+且返回的值取决于上一次`then`方法的返回值；特殊地，如果返回值也是一个`Promise`实例，则取其状态变更时的结果作为真正的返回值。
+
+基于上面的描述，我们可以得到如下代码：
+
+```js
+then(onResolved, onRejected) {
+    const that = this;
+    let nextPromise;
+
+    // 设置类型转换
+    onResolved = typeof onResolved === 'function' ? onResolved : noop;
+    onRejected = typeof onRejected === 'function' ? onRejected : noop;
+
+    // 根据实例的状态不同,共分三种情况:
+    // 1. resolved
+    if (this.status === RESOLVED) {
+      // 状态变更为resolved后执行onResolved方法,并返回新Promise实例
+      return nextPromise = new MyPromise((resolve, reject) => {
+        try {
+          const returns = onResolved(that.value); // 获取onResolved的返回值
+
+          if (returns instanceof MyPromise) { // 如果返回值是一个Promise实例,则将resolve作为onResolved传入.then方法中,递归调用;直至获取到非Promise实例为止
+            returns.then(resolve, reject);
+          }
+
+          resolve(returns);
+
+        } catch (e) {
+          reject(e);
+        }
+      })
+    }
+
+    // 2. rejected
+    if (this.status === REJECTED) {
+      // 与 前一个if基本相同,只是获取onRejected的返回值
+      return nextPromise = new MyPromise((resolve, reject) => {
+        try {
+          const returns = onRejected(that.reason);
+          if (returns instanceof MyPromise) {
+            returns.then(resolve, reject);
+          }
+
+          resolve(returns);
+
+        } catch (e) {
+          reject(e);
+        }
+      })
+    }
+
+    // 3. pending
+    if (this.status === PENDING) {
+      // 如果当前实例状态还处于pending状态(eg: 执行器函数中状态异步变更情境下),我们并不能确定调用onResolved还是onRejected
+      // 只能等到Promise的状态确定后,才能确定如何实现
+      // 所以此时我们需要把我们上述两种情况下的处理逻辑存入到对应的回调数组中去,等待 状态的变更(即resolve或reject方法的执行)
+      return nextPromise = new MyPromise((resolve, reject) => {
+        that.resolvedCallbackList.push((value) => {
+          try {
+            const returns = onResolved(value);
+            if (returns instanceof MyPromise) {
+              returns.then(resolve, reject);
+            }
+            
+            resolve(returns);
+            
+          } catch (e) {
+            reject(e);
+          }
+        })
+
+        that.rejectedCallbackList.push((reason) => {
+          try {
+            const returns = onRejected(reason);
+            if (returns instanceof MyPromise) {
+              returns.then(resolve, reject);
+            }
+            
+            resolve(returns);
+          	
+          } catch (e) {
+            reject(e);
+          }
+       })
+    })
+  }
+}
+```
+
+至于`catch`方法，本质上也只是`then`方法的一个语法糖，如下：
+
+```js
+catch(onRejected) {
+    return this.then(null, onRejected);
+}
+```
+
+
+
+ok，这时候我们的Promise大致已经可以正常使用了(可以试一下哦)
+
+但是，仍有一些细节点需要优化的：
+
+1. `Promise`的穿透特性未能实现：
+
+   ```js
+   new Promise((resolve) => {
+     resolve('seki')
+   })
+   	.then()
+   	.catch()
+   	.then((value) => {
+     	console.log(value); // 此处输出'seki',而非undefined
+   	})
+   
+   // 即,上述未传参的then与catch方法期望与下面的方法等价:
+   new Promise((resolve)=>{
+     resolve(8)
+   })
+     .then(function(value){
+       return value
+     })
+     .catch(function(reason){
+       throw reason
+     })
+     .then(function(value) {
+       console.log(value);
+     })
+   ```
+
+2. 不光是我们自己封装的`Promise`，还有其他人封装的`Promise`以及原生`Promise`；我们如果想要交替/组合使用它们，那`returns instanceof MyPromise`这样的判断条件便稍显简陋，需要一个更完善的解决方案
+
+3. 如果已经测试过上述代码的小伙伴一定发现了一个小(?)问题，`then/catch`方法中的`onResolved`与`onRejected`是**同步**执行的，这就会导致下面的情况发生：
+
+   ```js
+   const p = new MyPromise((resolve) => resolve('seki-1'));
+   
+   p.then(() => {
+     console.log('我是最后输出的');
+   })
+   
+   console.log('我应该紧跟在seki-1后面输出!');
+   
+   // 原生Promise(理想)打印顺序:
+   // 1)seki-1
+   // 2)我应该紧跟在seki-1后面输出!
+   // 3)我是最后输出的
+   
+   // 但MyPromise打印顺序:
+   // 1)seki-1
+   // 2)我是最后输出的
+   // 3)我应该紧跟在seki-1后面输出!
+   ```
+
+
+
+问题还挺多，那就一个一个的解决吧!
+
+
+
+### 值的穿透
+
+### 不同`Promise`交互
+
+### `then`异步执行
