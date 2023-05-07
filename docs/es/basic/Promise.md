@@ -125,9 +125,9 @@ constructor(executor) {
   }
   
   try {
-      executor(resolve, reject);
+    executor(resolve, reject);
   } catch (err) {
-      reject(err);
+    reject(err);
   }
 ...
 }
@@ -193,11 +193,11 @@ class MyPromise {
 
 
 
-### `then`与`catch`
+### `then`、`catch`、`finally`
 
 上一节可能会有疑惑，新引入两个实例属性`resolvedCallbackList`与`rejectedCallbackList`有何用处？
 
-我们都知道`Promise`的实例方法`then`的调用形式如下：
+我们都知道`Promise`的方法`then`的调用形式如下：
 
 ```js
 p.then(onResolved, onRejected)
@@ -213,27 +213,27 @@ p.then(onResolved, onRejected)
 const noop = () => {};
 ...
 then(onResolved, onRejected) {
-    // 设置类型转换
-    onResolved = typeof onResolved === 'function' ? onResolved : noop;
-    onRejected = typeof onRejected === 'function' ? onRejected : noop;
+  // 设置类型转换
+  onResolved = typeof onResolved === 'function' ? onResolved : noop;
+  onRejected = typeof onRejected === 'function' ? onRejected : noop;
 
-    // 根据实例的状态不同,共分三种情况:
-    // 1. resolved
-    if (this.status === RESOLVED) {
-
-    }
-
-    // 2. rejected
-    if (this.status === REJECTED) {
-
-    }
-
-    // 3. pending
-    if (this.status === PENDING) {
-      
-    }
+  // 根据实例的状态不同,共分三种情况:
+  // 1. resolved
+  if (this.status === RESOLVED) {
 
   }
+
+  // 2. rejected
+  if (this.status === REJECTED) {
+
+  }
+
+  // 3. pending
+  if (this.status === PENDING) {
+      
+  }
+
+}
 ```
 
 总所周知，`Promise`的`then`支持链式调用，也就是每个`then`方法都会返回一个新的`Promise`实例。
@@ -244,84 +244,83 @@ then(onResolved, onRejected) {
 
 ```js
 then(onResolved, onRejected) {
-    const that = this;
-    let nextPromise;
+  const that = this;
 
-    // 设置类型转换
-    onResolved = typeof onResolved === 'function' ? onResolved : noop;
-    onRejected = typeof onRejected === 'function' ? onRejected : noop;
+  // 设置类型转换
+  onResolved = typeof onResolved === 'function' ? onResolved : noop;
+  onRejected = typeof onRejected === 'function' ? onRejected : noop;
 
-    // 根据实例的状态不同,共分三种情况:
-    // 1. resolved
-    if (this.status === RESOLVED) {
-      // 状态变更为resolved后执行onResolved方法,并返回新Promise实例
-      return nextPromise = new MyPromise((resolve, reject) => {
-        try {
-          const returns = onResolved(that.value); // 获取onResolved的返回值
+  // 根据实例的状态不同,共分三种情况:
+  // 1. resolved
+  if (this.status === RESOLVED) {
+    // 状态变更为resolved后执行onResolved方法,并返回新Promise实例
+    return new MyPromise((resolve, reject) => {
+      try {
+        const returns = onResolved(that.value); // 获取onResolved的返回值
 
-          if (returns instanceof MyPromise) { // 如果返回值是一个Promise实例,则将resolve作为onResolved传入.then方法中,递归调用;直至获取到非Promise实例为止
-            returns.then(resolve, reject);
-          }
-
-          resolve(returns);
-
-        } catch (e) {
-          reject(e);
+        if (returns instanceof MyPromise) { // 如果返回值是一个Promise实例,则将resolve作为onResolved传入.then方法中,递归调用;直至获取到非Promise实例为止
+          returns.then(resolve, reject);
         }
-      })
-    }
 
-    // 2. rejected
-    if (this.status === REJECTED) {
-      // 与 前一个if基本相同,只是获取onRejected的返回值
-      return nextPromise = new MyPromise((resolve, reject) => {
+        resolve(returns);
+
+      } catch (e) {
+        reject(e);
+      }
+    })
+  }
+
+  // 2. rejected
+  if (this.status === REJECTED) {
+    // 与 前一个if基本相同,只是获取onRejected的返回值
+    return new MyPromise((resolve, reject) => {
+      try {
+        const returns = onRejected(that.reason);
+        if (returns instanceof MyPromise) {
+          returns.then(resolve, reject);
+        }
+
+        resolve(returns);
+
+      } catch (e) {
+        reject(e);
+      }
+    })
+  }
+
+  // 3. pending
+  if (this.status === PENDING) {
+    // 如果当前实例状态还处于pending状态(eg: 执行器函数中状态异步变更情境下),我们并不能确定调用onResolved还是onRejected
+    // 只能等到Promise的状态确定后,才能确定如何实现
+    // 所以此时我们需要把我们上述两种情况下的处理逻辑存入到对应的回调数组中去,等待 状态的变更(即resolve或reject方法的执行)
+    return new MyPromise((resolve, reject) => {
+      that.resolvedCallbackList.push((value) => {
         try {
-          const returns = onRejected(that.reason);
+          const returns = onResolved(value);
           if (returns instanceof MyPromise) {
             returns.then(resolve, reject);
           }
-
+            
           resolve(returns);
-
+          
         } catch (e) {
           reject(e);
         }
       })
-    }
 
-    // 3. pending
-    if (this.status === PENDING) {
-      // 如果当前实例状态还处于pending状态(eg: 执行器函数中状态异步变更情境下),我们并不能确定调用onResolved还是onRejected
-      // 只能等到Promise的状态确定后,才能确定如何实现
-      // 所以此时我们需要把我们上述两种情况下的处理逻辑存入到对应的回调数组中去,等待 状态的变更(即resolve或reject方法的执行)
-      return nextPromise = new MyPromise((resolve, reject) => {
-        that.resolvedCallbackList.push((value) => {
-          try {
-            const returns = onResolved(value);
-            if (returns instanceof MyPromise) {
-              returns.then(resolve, reject);
-            }
-            
-            resolve(returns);
-            
-          } catch (e) {
-            reject(e);
+      that.rejectedCallbackList.push((reason) => {
+        try {
+          const returns = onRejected(reason);
+          if (returns instanceof MyPromise) {
+            returns.then(resolve, reject);
           }
-        })
-
-        that.rejectedCallbackList.push((reason) => {
-          try {
-            const returns = onRejected(reason);
-            if (returns instanceof MyPromise) {
-              returns.then(resolve, reject);
-            }
             
-            resolve(returns);
+          resolve(returns);
           	
-          } catch (e) {
-            reject(e);
-          }
-       })
+        } catch (e) {
+          reject(e);
+        }
+      })
     })
   }
 }
@@ -331,7 +330,21 @@ then(onResolved, onRejected) {
 
 ```js
 catch(onRejected) {
-    return this.then(null, onRejected);
+  return this.then(null, onRejected);
+}
+```
+
+`finally`方法想必也不难理解，不管`resolve`或`reject`都会调用`finally`中的方法
+
+```js
+finally(onStatusChanged) {
+  return this.then((value) => {
+    onStatusChanged();
+    return value;
+  }, (reason) => {
+    onStatusChanged();
+    throw reason;
+  })
 }
 ```
 
@@ -355,7 +368,7 @@ ok，这时候我们的Promise大致已经可以正常使用了(可以试一下�
    
    // 即,上述未传参的then与catch方法期望与下面的方法等价:
    new Promise((resolve)=>{
-     resolve(8)
+     resolve('seki')
    })
      .then(function(value){
        return value
@@ -400,6 +413,378 @@ ok，这时候我们的Promise大致已经可以正常使用了(可以试一下�
 
 ### 值的穿透
 
-### 不同`Promise`交互
+这个问题想必大家在看到上述示例代码后便有了思路,那就是将`then`方法的传参默认值做出如下调整:
+
+```js
+onResolved = typeof onResolved === 'function' ? onResolved : value => value;
+onRejected = typeof onRejected === 'function' ? onRejected : reason => { throw reason };
+```
 
 ### `then`异步执行
+
+这个问题也并不难想到解决方案，那就是在`then`方法return的Promise实例的执行器函数改为异步执行即可，这里我们选择的是`setTimeout(() => {...}, 0)`的实现方式(代码在下一节统一展示)
+
+当然对于JS的事件循环机制有一定了解的同学一定知道`setTimeout`是一个宏任务，而真正的`Promise`是一个微任务。这里用`setTimeout`来模拟是因为Promise/A+规范中[3.1](https://promisesaplus.com/#notes)提到了可以使用宏任务/微任务机制来实现。
+
+这里采用`setTimeout`也是出于便于理解的目的。
+
+当然如果想要更完美的处理方案，可以使用DOM3中的[MutationObserver](https://developer.mozilla.org/zh-CN/docs/Web/API/MutationObserver)（微任务）来模拟实现
+
+### 不同`Promise`交互
+
+关于不同的`Promise`之间的交互,在`Promises/A+`规范描述内有[说明](https://promisesaplus.com/#the-promise-resolution-procedure)
+
+简单来说，就是考虑`then`方法的`onResolved/onRejected`函数调用的返回值的若干类型，做出不同的响应，以兼容整体的行为。
+
+我们要做的只是将其描述转换为代码：
+
+```js
+/**
+ * 根据returns的值来决定nextPromise的状态的函数
+ * @param {Promise} nextPromise
+ * @param {any} returns
+ * @param {function} resolve
+ * @param {function} reject
+ */
+function resolvePromise(nextPromise, returns, resolve, reject) {
+  let called = false;
+
+  if (nextPromise === returns) {
+    // 如果是相同对象,则抛出错误
+    return reject(new TypeError("Chaining cycle detected for promise!"));
+  }
+
+  if (
+    (returns !== null && typeof returns === "object") ||
+    typeof returns === "function"
+  ) {
+    // returns是对象/函数时
+    try {
+      // 注意点: 这里把 returns.then的值赋给then并不是可选的写法,而是有意义的
+      // 根据 Promise/A+规范2.3.3.1所描述的: 因为returns.then有可能是一个getter，这种情况下多次读取就有可能产生副作用
+      // typeof returns.then 读取一次, returns.then.call()又读取一次;两次读取可能会导致其值发生变化
+      let then = returns.then;
+      if (typeof then === "function") {
+        // 执行thenable对象下的then方法,兼容了所有类Promise结构
+        then.call(
+          returns,
+          function rs(y) {
+            if (called) return;
+            called = true;
+            resolvePromise(nextPromise, y, resolve, reject); // 没有直接resolve,是因为y的值仍然需要校验
+          },
+          function rj(r) {
+            if (called) return;
+            called = true;
+            reject(r); // 状态变更为失败则无需校验,直接处理结果
+          }
+        );
+      } else {
+        resolve(returns); // 不是 thenable对象,则直接将returns作为结果
+      }
+    } catch (e) {
+      if (called) return;
+      called = true;
+      reject(e);
+    }
+  } else {
+    // 其他情况下,直接将returns的值作为最终的值
+    resolve(returns);
+  }
+}
+```
+
+```js
+// then方法
+then(onResolved, onRejected) {
+  const that = this;
+  let nextPromise;
+
+  // 设置类型转换
+  onResolved =
+    typeof onResolved === "function" ? onResolved : (value) => value;
+  onRejected =
+    typeof onRejected === "function"
+      ? onRejected
+      : (reason) => {
+          throw reason;
+        };
+
+  // 根据实例的状态不同,共分三种情况:
+  // 1. resolved
+  if (this.status === RESOLVED) {
+    // 状态变更为resolved后执行onResolved方法
+    return (nextPromise = new MyPromise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const returns = onResolved(that.value); // 获取onResolved的返回值
+
+          resolvePromise(nextPromise, returns, resolve, reject);
+        } catch (e) {
+          reject(e);
+        }
+      }, 0);
+    }));
+  }
+
+  // 2. rejected
+  if (this.status === REJECTED) {
+    // 与 前一个if基本相同
+    return (nextPromise = new MyPromise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const returns = onRejected(that.reason);
+
+          resolvePromise(nextPromise, returns, resolve, reject);
+        } catch (e) {
+          reject(e);
+        }
+      }, 0);
+    }));
+  }
+
+  // 3. pending
+  if (this.status === PENDING) {
+    // 如果当前实例状态还处于pending状态(eg: 执行器函数中状态异步变更情境下),我们并不能确定调用onResolved还是onRejected
+    // 只能等到Promise的状态确定后,才能确定如何实现
+    // 所以此时我们需要把我们上述两种情况下的处理逻辑存入到对应的回调数组中去,等待 状态的变更(即resolve或reject方法的执行)
+    return (nextPromise = new MyPromise((resolve, reject) => {
+      that.resolvedCallbackList.push((value) => {
+        setTimeout(() => {
+          try {
+            const returns = onResolved(value);
+
+            resolvePromise(nextPromise, returns, resolve, reject);
+          } catch (e) {
+            reject(e);
+          }
+        }, 0);
+      });
+
+      that.rejectedCallbackList.push((reason) => {
+        setTimeout(() => {
+          try {
+            const returns = onRejected(reason);
+
+            resolvePromise(nextPromise, returns, resolve, reject);
+          } catch (e) {
+            reject(e);
+          }
+        }, 0);
+      });
+    }));
+  }
+}
+```
+
+
+
+### 完整代码
+
+到这里，我们的`Promise`手动实现也算告一段落。
+
+当然`Promise`上还有诸如`resolve()`、`reject()`、`all()`、`race()`等等常见静态方法，后续有机会的话也会补充进来。
+
+```js
+const PENDING = "pending";
+const RESOLVED = "resolved";
+const REJECTED = "rejected";
+
+/**
+ * 根据returns的值来决定nextPromise的状态的函数
+ * @param {Promise} nextPromise
+ * @param {any} returns
+ * @param {function} resolve
+ * @param {function} reject
+ */
+function resolvePromise(nextPromise, returns, resolve, reject) {
+  let called = false;
+
+  if (nextPromise === returns) {
+    // 如果是相同对象,则抛出错误
+    return reject(new TypeError("Chaining cycle detected for promise!"));
+  }
+
+  if (
+    (returns !== null && typeof returns === "object") ||
+    typeof returns === "function"
+  ) {
+    // returns是对象/函数时
+    try {
+      // 注意点: 这里把 returns.then的值赋给then并不是可选的写法,而是有意义的
+      // 根据 Promise/A+规范2.3.3.1所描述的: 因为returns.then有可能是一个getter，这种情况下多次读取就有可能产生副作用
+      // typeof returns.then 读取一次, returns.then.call()又读取一次;两次读取可能会导致其值发生变化
+      let then = returns.then;
+      if (typeof then === "function") {
+        // 执行thenable对象下的then方法,兼容了所有类Promise结构
+        then.call(
+          returns,
+          function rs(y) {
+            if (called) return;
+            called = true;
+            resolvePromise(nextPromise, y, resolve, reject); // 没有直接resolve,是因为y的值仍然需要校验
+          },
+          function rj(r) {
+            if (called) return;
+            called = true;
+            reject(r); // 状态变更为失败则无需校验,直接处理结果
+          }
+        );
+      } else {
+        resolve(returns); // 不是 thenable对象,则直接将returns作为结果
+      }
+    } catch (e) {
+      if (called) return;
+      called = true;
+      reject(e);
+    }
+  } else {
+    // 其他情况下,直接将returns的值作为最终的值
+    resolve(returns);
+  }
+}
+
+/**
+ * 手动实现Promise
+ */
+class MyPromise {
+  constructor(executor) {
+    this.status = PENDING; // 当前状态
+    this.value = undefined; // 存放 resolved状态下的值
+    this.reason = undefined; // 存放 rejected状态下的值
+    this.resolvedCallbackList = []; // 存放成功的回调
+    this.rejectedCallbackList = []; // 存放失败的回调
+
+    const resolve = (value) => {
+      if (this.status === PENDING) {
+        // promise实例的状态一旦变更,便不会再次变化
+        this.status = RESOLVED;
+        this.value = value;
+        for (let i = 0; i < this.resolvedCallbackList.length; i++) {
+          this.resolvedCallbackList[i](value);
+        }
+      }
+    };
+
+    const reject = (reason) => {
+      if (this.status === PENDING) {
+        this.status = REJECTED;
+        this.reason = reason;
+        for (let i = 0; i < this.resolvedCallbackList.length; i++) {
+          this.rejectedCallbackList[i](reason);
+        }
+      }
+    };
+
+    // Promise中代码如果出现异常,则需要将状态变更为rejected
+    // 故此处采用 try catch 捕捉错误
+    try {
+      executor(resolve, reject);
+    } catch (err) {
+      reject(err);
+    }
+  }
+
+  then(onResolved, onRejected) {
+    const that = this;
+    let nextPromise;
+
+    // 设置类型转换
+    onResolved =
+      typeof onResolved === "function" ? onResolved : (value) => value;
+    onRejected =
+      typeof onRejected === "function"
+        ? onRejected
+        : (reason) => {
+            throw reason;
+          };
+
+    // 根据实例的状态不同,共分三种情况:
+    // 1. resolved
+    if (this.status === RESOLVED) {
+      // 状态变更为resolved后执行onResolved方法
+      return (nextPromise = new MyPromise((resolve, reject) => {
+        setTimeout(() => {
+          try {
+            const returns = onResolved(that.value); // 获取onResolved的返回值
+
+            resolvePromise(nextPromise, returns, resolve, reject);
+          } catch (e) {
+            reject(e);
+          }
+        }, 0);
+      }));
+    }
+
+    // 2. rejected
+    if (this.status === REJECTED) {
+      // 与 前一个if基本相同
+      return (nextPromise = new MyPromise((resolve, reject) => {
+        setTimeout(() => {
+          try {
+            const returns = onRejected(that.reason);
+
+            resolvePromise(nextPromise, returns, resolve, reject);
+          } catch (e) {
+            reject(e);
+          }
+        }, 0);
+      }));
+    }
+
+    // 3. pending
+    if (this.status === PENDING) {
+      // 如果当前实例状态还处于pending状态(eg: 执行器函数中状态异步变更情境下),我们并不能确定调用onResolved还是onRejected
+      // 只能等到Promise的状态确定后,才能确定如何实现
+      // 所以此时我们需要把我们上述两种情况下的处理逻辑存入到对应的回调数组中去,等待 状态的变更(即resolve或reject方法的执行)
+      return (nextPromise = new MyPromise((resolve, reject) => {
+        that.resolvedCallbackList.push((value) => {
+          setTimeout(() => {
+            try {
+              const returns = onResolved(value);
+
+              resolvePromise(nextPromise, returns, resolve, reject);
+            } catch (e) {
+              reject(e);
+            }
+          }, 0);
+        });
+
+        that.rejectedCallbackList.push((reason) => {
+          setTimeout(() => {
+            try {
+              const returns = onRejected(reason);
+
+              resolvePromise(nextPromise, returns, resolve, reject);
+            } catch (e) {
+              reject(e);
+            }
+          }, 0);
+        });
+      }));
+    }
+  }
+
+  catch(onRejected) {
+    return this.then(null, onRejected);
+  }
+  
+  finally(onStatusChanged) {
+    return this.then((value) => {
+      onStatusChanged();
+      return value;
+    }, (reason) => {
+      onStatusChanged();
+      throw reason;
+    })
+  }
+}
+```
+
+
+
+### 参考文章
+
+1. https://promisesaplus.com/
+2. https://github.com/xieranmaya/blog/issues/3
+3. https://zhuanlan.zhihu.com/p/183801144
