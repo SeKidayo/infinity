@@ -11,6 +11,14 @@ module.exports = {
   },
   plugins: [
     path.resolve(__dirname, "plugins/code-copy/index.js"),
+    [
+      "vuepress-plugin-live2d",
+      {
+        modelName: "shizuku",
+        mobileShow: false,
+        position: "left",
+      },
+    ],
   ],
   themeConfig: {
     nav: [
