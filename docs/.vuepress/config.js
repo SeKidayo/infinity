@@ -1,3 +1,5 @@
+const path = require("path");
+
 module.exports = {
   title: "Seki的技术小屋",
   description: "Seki的各种学习笔记",
@@ -7,7 +9,9 @@ module.exports = {
       lang: "zh-CN",
     },
   },
-  theme: "reco",
+  plugins: [
+    path.resolve(__dirname, "plugins/code-copy/index.js"),
+  ],
   themeConfig: {
     nav: [
       {
@@ -27,7 +31,7 @@ module.exports = {
         children: [{ title: "Promise", path: "/es/basic/Promise" }],
       },
     ],
-    subSidebar: "auto",
+    sidebarDepth: 0, // 0 - 仅展示<h1>级别标题
     lastUpdated: "上次更新",
   },
   head: [
