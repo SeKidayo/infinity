@@ -2,7 +2,7 @@ import Vue from 'vue';
 import CodeCopy from '../components/CodeCopy.vue';
 
 export default {
-  mounted() {
+  updated() {
     // 防止影响其原有逻辑
     setTimeout(() => {
       document.querySelectorAll('div[class*="language-"] pre').forEach((el) => {
@@ -25,12 +25,4 @@ export default {
       });
     }, 100);
   },
-  // updated() {
-  //   // 防止影响其原有逻辑
-  //   setTimeout(() => {
-  //     document.querySelectorAll('div[class*="language-"] pre').forEach((el) => {
-  //       // 防止重复设置
-  //     });
-  //   }, 100);
-  // },
 };

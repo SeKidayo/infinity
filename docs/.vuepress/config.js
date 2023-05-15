@@ -19,6 +19,20 @@ module.exports = {
         position: "left",
       },
     ],
+    [
+      'vuepress-plugin-comment',
+      {
+        choosen: 'valine',
+        options: {
+          el: '#seki-comment',
+          placeholder: '说点什么吧!',
+          avatar: 'retro',
+          meta: ['nick', 'mail'],
+          appId: 'rTkQNEyTlX5x1u5mzZWXdrm5-gzGzoHsz',
+          appKey: 'aDcBk4xOc88nHww1dVvO2AsI',
+        }
+      }
+    ],
   ],
   themeConfig: {
     nav: [
